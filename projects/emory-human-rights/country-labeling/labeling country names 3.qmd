@@ -1,0 +1,89 @@
+---
+title: "Labeling Country Names in `before 2017` and `master_US`"
+format: html
+editor: source
+---
+
+# Setup
+
+```{r}
+# Load packages
+pacman::p_load(tidyverse, countrycode, knitr)
+```
+
+```{r}
+# Load data frames
+before2017 <- read.csv("original files/before2017_fixed_wo_traintest.csv")
+master_US <- read.csv("original files/master_US_2021-2022.csv")
+states2016 <- read.csv("original files/states2016.csv")
+```
+
+# Labeling texts
+
+```{r}
+# Create dictionary from `codelist` and `states2016`
+codelist <- countrycode::codelist |> 
+  select(cowc, country.name.en.regex) |>
+  filter(cowc %in% states2016[-1,]$calph) |>  # `-1` excludes US
+  
+  # Add capitals
+  left_join(states2016 |> 
+              select(cowc = calph, capital, capital2, capital3), 
+            by = "cowc") |>  
+  
+  # Turn to a named list
+ mutate(regex_list = pmap(list(country.name.en.regex, capital, capital2, capital3), ~ discard(c(...), ~ is.na(.x) || .x == ""))) |>
+  select(cowc, regex_list) |> 
+  deframe()
+```
+
+```{r}
+# Labeling function
+text_to_label <- function(sentence, country_list) {
+  
+  # Create a list with COW code as names and occurrence counts as values
+  country_counts <- setNames(
+    sapply(names(country_list), function(cowc) {
+      sum(sapply(country_list[[cowc]], function(regex) str_count(sentence, regex(regex, ignore_case = TRUE))))
+    }), 
+    names(country_list)
+  )
+  
+  # Remove countries with zero occurrences
+  country_counts <- country_counts[country_counts > 0]
+  
+  # If no country is mentioned, return "0"
+  if (length(country_counts) == 0) {
+    return(0)
+  }
+  
+  # Find countries with max counts
+  top_countries <- names(country_counts[country_counts == max(country_counts)])
+  
+  # If there's a tie, return "0", otherwise return the most mentioned COWC code
+  if (length(top_countries) > 1) {
+    return(0)
+  } else {
+    return(top_countries)
+  }
+}
+```
+
+```{r}
+labeled_before2017 <- before2017[1:100,] |>
+  mutate(COW = sapply(texts, text_to_label, country_list = codelist))
+
+write.csv(labeled_before2017, file = "labeled_before2017_sample.csv", row.names = FALSE)
+```
+
+```{r}
+labeled_master_US <- master_US[1:100,]|>
+  mutate(COW = sapply(texts, text_to_label, country_list = codelist))
+write.csv(labeled_master_US, file = "labeled_master_US1.csv", row.names = FALSE)
+```
+
+```{r}
+labeled_master_US3 <- master_US[201:300,]|>
+  mutate(COW = sapply(texts, text_to_label, country_list = codelist))
+write.csv(labeled_master_US3, file = "labeled_master_US3.csv", row.names = FALSE)
+```
