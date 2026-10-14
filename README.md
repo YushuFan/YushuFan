@@ -11,12 +11,12 @@ I use **Python, SQL, and R**. I'm interested in **data science and analytics int
 ### [Food Bank Orders During Disasters](https://github.com/YushuFan/food-bank-disaster-analysis)
 Analyzed 606,316 order lines with Python and SQL to compare weekly activity during disaster and non-disaster periods. Data validation and calendar-adjusted regression did not provide clear evidence of an increase in orders.
 
-[View analysis](https://yushufan.github.io/projects/food-bank/) · [Code](https://github.com/YushuFan/food-bank-disaster-analysis) · [Original R study](projects/ai-data-lab)
+[View analysis](https://yushufan.github.io/projects/food-bank/) · [Code](https://github.com/YushuFan/food-bank-disaster-analysis) · [Original R study](https://github.com/YushuFan/YushuFan/tree/main/projects/ai-data-lab)
 
-### [Country Labeling for Human Rights Reports](projects/emory-human-rights)
+### [Country Labeling for Human Rights Reports](https://github.com/YushuFan/YushuFan/tree/main/projects/emory-human-rights)
 Built country-labeling rules for 10K+ documents and standardized 100K+ report sections at Emory. Selected R and Python scripts show the text preparation and country-name matching work.
 
-[Read project](projects/emory-human-rights) · [View a labeling example](projects/emory-human-rights/EXAMPLE.md)
+[Read project](https://github.com/YushuFan/YushuFan/tree/main/projects/emory-human-rights) · [View a labeling example](projects/emory-human-rights/EXAMPLE.md)
 
 ---
 
