@@ -1,32 +1,30 @@
 # Yushu Fan
 
-**Data Science & Mathematics student at the University of Chicago**  
-I use experimentation, statistical modeling, and clear communication to help teams make better decisions.
+**Data Science & Mathematics student at the University of Chicago**
 
-I’m interested in data science, analytics, and decision science internships—especially work that turns messy data into evidence people can act on.
+I work across applied research, product analytics, and decision support. My portfolio brings together research workflows from Emory and a Python + SQL reanalysis of food-bank operations.
 
-- **Focus:** product experimentation · applied statistics · decision support · data products
-- **Tools:** Python · SQL · R
+**Interested in:** data science · data analytics · decision science internships  
+**Tools:** Python · SQL · R
 
-## Featured project
+## Selected work
 
-### [Do disaster weeks bring more food-bank orders?](https://github.com/YushuFan/food-bank-disaster-analysis)
+### [Emory human-rights research data](https://github.com/YushuFan/YushuFan/tree/main/projects/emory-human-rights)
+Built rule-based country-labeling and NLP workflows for a human-rights rhetoric research project, helping prepare 10K+ documents and 100K+ report sections for downstream analysis. The repository preserves selected original scripts; source reports are not included.
 
-An audit-first Python + SQL rebuild of a collaborative food-bank research project. I validated more than 600,000 order-line records and compared recorded order activity across disaster and non-disaster weeks.
+### [AI.Data Lab × TechBridge food distribution study](https://github.com/YushuFan/YushuFan/tree/main/projects/ai-data-lab)
+Original collaborative Emory project studying food-bank transactions, offers, and disaster exposure. My R analyses are archived as written; the original team study reported an association between disaster severity and transaction volume (p = .006).
 
-**Finding:** the adjusted estimate was −2.9% (95% interval: −13.0% to +8.4%). The study supports a monitoring baseline, not a fixed surge multiplier or a causal claim.
-
-[Read the findings](https://github.com/YushuFan/food-bank-disaster-analysis/blob/main/reports/FINDINGS.md) · [View the analysis and code](https://github.com/YushuFan/food-bank-disaster-analysis) · [See the sensitivity chart](https://raw.githubusercontent.com/YushuFan/food-bank-disaster-analysis/main/reports/figures/sensitivity.png)
+### [Food-bank operations reanalysis](https://github.com/YushuFan/food-bank-disaster-analysis)
+A later Python + SQL reanalysis audits order records and tests a different disaster exposure definition. Its estimate is inconclusive and is not a like-for-like replication of the original study.
 
 ## Experience
 
 - **Tencent — Data Science Intern:** evaluated product experiments and built a structured framework for launch decisions.
 - **KindEd — Data Science Intern:** built Python research and reporting workflows for education analytics.
-- **Emory AI.Data Lab / TechBridge — Researcher:** analyzed food-distribution records alongside disaster data; original R analysis authored by me as part of a collaborative project.
+- **Emory University — Research Assistant:** developed data-labeling and NLP workflows for human-rights research.
+- **Emory AI.Data Lab / TechBridge — Researcher:** analyzed food-distribution records with disaster data as part of a collaborative team.
 
-## More
+## Links
 
-- [Personal site](https://yushufan.github.io)
-- [LinkedIn](https://www.linkedin.com/in/yushu-fan/)
-- [Email](mailto:yushuf@uchicago.edu)
-
+[Personal site](https://yushufan.github.io) · [LinkedIn](https://www.linkedin.com/in/yushu-fan/) · [Email](mailto:yushuf@uchicago.edu)
