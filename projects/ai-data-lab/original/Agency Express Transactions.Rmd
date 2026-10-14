@@ -1,0 +1,185 @@
+---
+title: "Agency Express Transactions"
+output: html_document
+date: "2024-10-22"
+---
+
+```{r}
+#Loading packages
+pacman::p_load(readxl,tidyverse,lubridate,janitor)
+```
+
+```{r}
+#Import Agency Express Data
+ae_documentline <- read_excel("AE Data.xlsx", sheet = "AE - DocumentLine", col_types = "text")
+```
+
+```{r}
+# Data Cleaning
+ae_documentline <- ae_documentline|>
+  clean_names()|>
+  mutate(accepteddate = ymd(accepteddate))|>
+  rename(accepted_date = accepteddate)|>
+  filter(!is.na(accepted_date))
+```
+
+```{r}
+#Import Data on Georgia Natural Disasters
+events_GA <- read_csv("events-GA-2014-2024.csv", skip = 2)
+```
+
+# Daily Transactions
+
+```{r}
+#Computing daily transactions
+ae_full_dates <- tibble(accepted_date = seq(min(ae_documentline$accepted_date), 
+                                      max(ae_documentline$accepted_date), by = "day"))
+                                      
+daily_transaction <- ae_documentline |>
+  group_by(accepted_date) |>
+  summarise(
+    daily_transaction_count = n_distinct(headerid), 
+    daily_transaction = sum(as.numeric(rprop1), na.rm = TRUE)) |>
+  right_join(ae_full_dates, by = "accepted_date")|>
+  arrange(accepted_date)
+```
+
+```{r}
+#Daily transactions over all time
+daily_transaction |>
+  ggplot(aes(x = accepted_date, y = daily_transaction)) +
+  geom_line() +
+  labs(title = "All Time Daily Transactions",
+       x = "Date",
+       y = "Total Daily Transaction (USD)")
+
+#Number of daily transaction over all time
+daily_transaction |>
+  ggplot(aes(x = accepted_date, y = daily_transaction_count)) +
+  geom_line() +
+  labs(title = "All Time Daily Transaction Count",
+       x = "Date",
+       y = "Number of Daily Transactions")
+```
+
+```{r}
+#Daily transactions over specific range of time
+start_date <- 20180101
+end_date <- 20181231
+
+daily_transaction |>
+  filter(accepted_date >= ymd(start_date) & accepted_date <= ymd(end_date))|>
+  ggplot(aes(x = accepted_date, y = daily_transaction)) +
+  geom_line() +
+  labs(title = paste0("Daily Transaction from ", ymd(start_date), " to ", ymd(end_date)),
+       x = "Date",
+       y = "Total Daily Transaction (USD)")
+
+daily_transaction |>
+  filter(accepted_date >= ymd(start_date) & accepted_date <= ymd(end_date))|>
+  ggplot(aes(x = accepted_date, y = daily_transaction_count)) +
+  geom_line() +
+  labs(title = paste0("Daily Transaction Count from ", ymd(start_date), " to ", ymd(end_date)),
+       x = "Date",
+       y = "Daily Transaction count")
+```
+
+# Natural Disasters
+
+```{r}
+#Transforming the disaster data
+disaster <- events_GA |>
+  clean_names()|>
+  rowwise() |>
+  mutate(date = list(seq(ymd(`begin_date`), ymd(`end_date`), by = "day"))) |>
+  unnest_longer(date)|>
+  filter(disaster != "Drought" & disaster != "Wildfire")
+```
+
+# Natural Disasters and Transactions
+
+```{r}
+#Joining natural disaster and daily transaction data
+disaster_on_transaction <- left_join(
+  daily_transaction |>
+    rename(date = accepted_date), 
+  disaster |>
+    select(date, disaster, unadjusted_cost), 
+  by = "date"
+) |>
+  mutate(unadjusted_cost = as.numeric(unadjusted_cost))
+```
+
+```{r}
+#Creating weekly data
+weekly_disaster_on_transaction <- disaster_on_transaction |>
+  group_by(date = floor_date(date,"week"))|>
+  summarise(weekly_transaction_count = ifelse(all(is.na(daily_transaction_count)), NA, 
+                                         sum(daily_transaction_count, na.rm = TRUE)),
+            weekly_transaction = ifelse(all(is.na(daily_transaction)), NA, 
+                                         sum(daily_transaction, na.rm = TRUE)),
+            weekly_cost = first(na.omit(unadjusted_cost)),
+            disaster = first(na.omit(disaster)),
+            .groups = "drop")
+```
+
+```{r}
+#Plotting Natural Disaster and Weekly Transactions
+start_date <- ymd("20200101")
+end_date <- ymd("20201231")
+
+weekly_disaster_on_transaction |>
+  mutate(weekly_cost = if_else(is.na(disaster) & is.na(weekly_cost), 0, weekly_cost))|>
+  filter(date >= start_date & date <= end_date) |>
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = weekly_transaction, color = "Weekly Transaction ($)")) +  
+  geom_line(aes(y = weekly_cost, color = "Weekly Natural Disaster Cost (million $)")) +
+  labs(
+    title = paste0("Natural Disaster Cost and AE Transactions from ", start_date, " to ", end_date),
+    x = "Date",
+    y = "Value",
+    color = "Legend") +
+  theme(legend.position = "bottom")
+```
+
+
+```{r}
+#Plotting Natural Disaster's effect on Weekly Transactions
+weekly_disaster_on_transaction |>
+  mutate(weekly_cost = if_else(is.na(disaster) & is.na(weekly_cost), 0, weekly_cost))|>
+  ggplot(aes(x = weekly_cost, y = weekly_transaction, color = disaster))+
+  geom_point()+
+  geom_smooth(method = "lm", color = "blue")+
+  labs(title = "Natural Disaster's Effect on AE Transactions",
+       y = "Weekly Transactions ($)",
+       x = "Weekly Natural Disaster Cost (million $)",
+       color = "Disaster")
+```
+
+#Plotting Natural Disaster's effect on Weekly Transaction Count
+weekly_disaster_on_transaction |>
+  mutate(weekly_cost = replace_na(weekly_cost, 0))|>
+  ggplot(aes(x = weekly_cost, y = weekly_transaction_count, color = disaster))+
+  geom_point()+
+  geom_smooth(method = "lm", color = "blue")+
+  labs(title = "Effect of Natural Disaster on AE Food Transaction Count",
+       y = "Weekly Transaction Count",
+       x = "Weekly Natural Disaster Cost (million $)",
+       color = "Disaster")
+
+#Plotting Natural Disaster and Daily Transactions
+disaster_on_transaction |>
+  mutate(unadjusted_cost = replace_na(unadjusted_cost, 0))|>
+  filter(date >= ymd("20200601") & date <= ymd("20201230"))|>
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = daily_transaction), color = "#1f77b4") +  
+  geom_line(aes(y = unadjusted_cost),color = "#ff7f0e")+
+  labs(title = "Daily Transactions and Cost of Disaster Over Time")
+
+
+#Plotting Natural Disaster's effect on Daily Transactions
+disaster_on_transaction |>
+  mutate(unadjusted_cost = if_else(is.na(disaster) & is.na(unadjusted_cost), 0, 1))|>
+  ggplot(aes(x = unadjusted_cost, y = daily_transaction, color = disaster))+
+  geom_point()+
+  geom_smooth(method = "lm", se = TRUE, color = "blue")
