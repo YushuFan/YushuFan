@@ -1,17 +1,17 @@
-# Emory Research Assistantship — Human Rights Rhetoric
+# Country Labeling for Human Rights Reports
 
-**Country labeling and text preparation for a U.S. foreign-policy research project**
+At Emory, I developed country-name matching rules and prepared text for research on U.S. human-rights rhetoric. My RA work included a labeling/NLP workflow for 10K+ documents and standardizing 100K+ report sections.
 
-As a Research Assistant in Emory's Department of Data and Decision Sciences, I developed rule-based methods for identifying country mentions in U.S. State Department messages and worked on text preprocessing for a larger human-rights rhetoric corpus. The work supported downstream research by turning long, unstructured documents into more usable analysis inputs.
+## Start here
 
-This folder preserves selected original code files in their working form. It does not include the underlying State Department corpus, labeled datasets, or research outputs. The archived scripts are historical project materials: some depend on local data files that are not included, and draft accuracy placeholders remain unfilled.
+- [A country-labeling example](EXAMPLE.md): why a substring match can confuse Niger with Nigeria.
+- [Country-labeling working draft](country-labeling/Labeling%20country%20names%20v4.qmd): dictionary cleanup, matching rules, and assignment logic.
+- [Text preprocessing](nlp-preprocessing/NLP.ipynb) and [corpus collection](corpus-collection/labeling-pts.ipynb): selected original notebooks.
 
-## Preserved source files
+## What the labeling code does
 
-- `country-labeling/` — six Quarto/R working versions of the country-labeling analysis.
-- `nlp-preprocessing/NLP.ipynb` — small preprocessing notebook with no saved outputs.
-- `corpus-collection/labeling-pts.ipynb` — small labeling notebook with no saved outputs.
+The R draft builds a country-name dictionary, counts matches in each document, and assigns the country with the most matches. Ties and documents without matches receive `0`. Specific rules address overlapping names such as Niger/Nigeria and Sudan/South Sudan.
 
-## Scope and attribution
+## Contribution and data
 
-The RA work included standardizing 100K+ report sections and building a rule-based labeling/NLP workflow for 10K+ documents, as summarized on my resume. This archive shares selected original code, not the underlying restricted or third-party text. Code is preserved unchanged; descriptions here provide context and do not claim that every archived draft is a complete, reproducible pipeline.
+These are selected historical scripts from my research assistantship, not the full research corpus. The original files remain unchanged; they depend on data not included here. Some drafts contain unfinished accuracy placeholders, so no measured accuracy is claimed. The larger project and research outputs were collaborative.

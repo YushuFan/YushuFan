@@ -1,30 +1,23 @@
 # Yushu Fan
 
-**Data Science & Mathematics student at the University of Chicago**
+I'm Yushu, a University of Chicago student studying data science, statistics, and mathematics.
 
-I work across applied research, product analytics, and decision support. My portfolio brings together research workflows from Emory and a Python + SQL reanalysis of food-bank operations.
+I've evaluated A/B tests at Tencent, automated school survey reports at KindEd, and worked on human-rights and food-distribution research at Emory.
 
-**Interested in:** data science · data analytics · decision science internships  
-**Tools:** Python · SQL · R
+I use **Python, SQL, and R**. I'm interested in **data science and analytics internships**.
 
-## Selected work
+## Selected projects
 
-### [Emory human-rights research data](https://github.com/YushuFan/YushuFan/tree/main/projects/emory-human-rights)
-Built rule-based country-labeling and NLP workflows for a human-rights rhetoric research project, helping prepare 10K+ documents and 100K+ report sections for downstream analysis. The repository preserves selected original scripts; source reports are not included.
+### [Food Bank Orders During Disasters](https://github.com/YushuFan/food-bank-disaster-analysis)
+Analyzed 606,316 order lines with Python and SQL to compare weekly activity during disaster and non-disaster periods. Data validation and calendar-adjusted regression did not provide clear evidence of an increase in orders.
 
-### [AI.Data Lab × TechBridge food distribution study](https://github.com/YushuFan/YushuFan/tree/main/projects/ai-data-lab)
-Original collaborative Emory project studying food-bank transactions, offers, and disaster exposure. My R analyses are archived as written; the original team study reported an association between disaster severity and transaction volume (p = .006).
+[View analysis](https://yushufan.github.io/projects/food-bank/) · [Code](https://github.com/YushuFan/food-bank-disaster-analysis) · [Original R study](projects/ai-data-lab)
 
-### [Food-bank operations reanalysis](https://github.com/YushuFan/food-bank-disaster-analysis)
-A later Python + SQL reanalysis audits order records and tests a different disaster exposure definition. Its estimate is inconclusive and is not a like-for-like replication of the original study.
+### [Country Labeling for Human Rights Reports](projects/emory-human-rights)
+Built country-labeling rules for 10K+ documents and standardized 100K+ report sections at Emory. Selected R and Python scripts show the text preparation and country-name matching work.
 
-## Experience
+[Read project](projects/emory-human-rights) · [View a labeling example](projects/emory-human-rights/EXAMPLE.md)
 
-- **Tencent — Data Science Intern:** evaluated product experiments and built a structured framework for launch decisions.
-- **KindEd — Data Science Intern:** built Python research and reporting workflows for education analytics.
-- **Emory University — Research Assistant:** developed data-labeling and NLP workflows for human-rights research.
-- **Emory AI.Data Lab / TechBridge — Researcher:** analyzed food-distribution records with disaster data as part of a collaborative team.
+---
 
-## Links
-
-[Personal site](https://yushufan.github.io) · [LinkedIn](https://www.linkedin.com/in/yushu-fan/) · [Email](mailto:yushuf@uchicago.edu)
+[Website](https://yushufan.github.io/) · [Resume](https://yushufan.github.io/resume.html) · [LinkedIn](https://www.linkedin.com/in/yushu-fan/) · [Email](mailto:yushuf@uchicago.edu)

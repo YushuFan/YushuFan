@@ -1,4 +1,4 @@
-# AI.Data Lab × TechBridge
+# Food Distribution and Disasters: Original R Study
 
 **Food distribution, severe weather, and disaster exposure in Georgia**
 
