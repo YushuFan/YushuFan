@@ -1,0 +1,173 @@
+---
+title: "Labeling Country Names for Messages"
+output: html_document
+date: "2025-01-21"
+---
+
+# Set up
+
+```{r}
+# Load packages
+pacman::p_load(tidyverse, knitr)
+```
+
+```{r}
+# Import `states2016.csv`
+states2016 <- read_csv("original files/states2016.csv", show_col_types = FALSE)
+
+# Import `before2017_fixed_wo_traintest.csv`
+before2017 <- read_csv("original files/before2017_fixed_wo_traintest.csv", show_col_types = FALSE)
+```
+
+# Cleaning `states2016`
+
+```{r}
+# Display `states2016.csv`
+kable(head(states2016))
+```
+
+It seems like `ctrname1` is shorter names and `ctrname2` is the full names of countries. However, if we count for both the names, e.g., "Swaziland" and "Kingdom of Swaziland", then if the phrase "Kingdom of Swaziland" appears in `before2017` it would be counted twice. Therefore, we only need to consider the count for "Swaziland", and other *unique* alternative names such as "Eswatini".
+
+```{r}
+delete_repetition <- function(row) {
+  for (col in 4:7) {
+    names <- as.character(row[3:(col-1)])
+    names <- names[!is.na(names)]
+    
+    if (!is.na(row[col])) {
+      if (any(str_detect(row[col], names))) {
+        row[col] <- NA
+      }
+    }
+  }
+  return(row)
+}
+
+states2016 <- as.data.frame(t(apply(states2016, 1, delete_repetition)))
+
+kable(states2016)
+```
+
+Some issues are found so I just edited them manually.
+
+```{r}
+# “Antigua & Barbuda” to "Antigua and Barbuda"
+states2016[14, "ctrname1"] <- "Antigua and Barbuda"
+
+# "Republic of Cabo Verde" to "Cabo Verde"
+states2016[84, "ctrname2"] <- "Cabo Verde"
+
+# "Republic of Cote d'Ivoire" contains "Cote d'Ivoire"
+states2016[94, "ctrname2"] <- "Cote d'Ivoire"
+states2016[94, "ctrname3"] <- NA
+
+# "Federated States of Micronesia" contains "Micronesia"
+states2016[194, "ctrname1"] <- "Micronesia"
+states2016[194, "ctrname2"] <- NA
+
+# Delete improper spelling
+states2016[29, "ctrname2"] <- NA # "Republic of Pero"
+states2016[31, "ctrname2"] <- NA # "Plurinational State of Blovia"
+states2016[175, "ctrname2"] <- NA # "Socialist Republic of Viet Nam"
+
+# Delete demonyms
+states2016[44, "ctrname3"] <- NA # "Swiss"
+states2016[52, "ctrname3"] <- NA # "Czech"
+states2016[53, "ctrname3"] <- NA # "Serbia"
+states2016[168, "ctrname4"] <- NA # "Slovak"
+states2016[172, "ctrname3"] <- NA # "Thai"
+
+# Delete names in native language 
+states2016[45, "ctrname3"] <- NA # Espana"
+states2016[138, "ctrname3"] <- NA # Turkiye"
+```
+
+### Questions with `states2016`
+
+Some alternative country names are not included in `states2016.csv`. For example, I have spotted "R.O.K." appearing few times, but is not included in `states2016.csv`. Currently, I have not added those alternative names.
+
+Two countries recognized by U.S. (https://history.state.gov/countries/all) appearing in `before2017.csv` but are not in `states.2016.csv`. "Holy See" appears in 13 rows, "Cayman Islands" appears once, but they are not in `states2016.csv`. Currently, I have not added them.
+
+# Labeling
+
+The function created for counting country mentions also 
+
+```{r}
+text_to_country <- function(states2016, before2017) {
+  
+  # Create dictionary from states2016
+  dictionary <- list()
+  for(i in 1:nrow(states2016)) {
+    calph <- states2016[i, 1]
+    names <- unlist(states2016[i, -1])
+    names <- names[!is.na(names)]
+    dictionary[[calph]] <- names
+  }
+  
+  # Function to count country mentions in text
+  frequency <- function(text) {
+    counts <- list()
+    for(calph in names(dictionary)) {
+      count <- sum(
+        sapply(dictionary[[calph]], function(name) {str_count(text, name)}))
+      if(count > 0) counts[[calph]] <- count
+    }
+    
+    # Handle cases based on counts
+    if(length(counts) == 0) return("0")
+    max_count <- max(unlist(counts))
+    max_countries <- names(counts)[unlist(counts) == max_count]
+    if(length(max_countries) > 1) return("0")
+    return(max_countries)
+  }
+  
+  # Apply to each row of before2017
+  before2017$calph <- sapply(before2017$texts, frequency)
+  return(before2017)
+}
+```
+
+```{r}
+# Trimming data frames for use
+states2016 <- states2016[-1,] |>
+  select(-c(ccode, notes))
+```
+
+```{r}
+# Apply counting function
+labeled_before2017 <- text_to_country(states2016, before2017)
+
+kable(head(labeled_before2017, 100))
+```
+
+
+```{r}#
+# Exporting the file
+write.csv(result, file = "labeled_before2017.csv", row.names = FALSE)
+```
+
+### Limitations with currect 
+
+- "Democratic Republic of the Congo" will also be counted into "Republic of the Congo"
+
+- “Burma Myanmar” or “United Kingdom of Great Britain and Northern Ireland” would count the country twice
+
+### Questions with labeling rules
+
+- Can words like “Vietnamese” or “Chinese” be counted?
+
+- Can I count for, e.g., “(blank)Vietnam(blank)” or “Vietnam”? if “(blank)Vietnam(blank)”, many messages without spacing between words would be excluded; if “Vietnam”, “Vietnamese” would be included
+
+- Can absolute frequency also be considered? Many messages only have one single country/capital mentioned once, where the message is mainly not talking about the frequency. 
+
+- Could there be possible typos? “Viet Nam” found once
+
+- count
+
+- Democratic Republic of Congo to DPRC 
+
+- Holy See
+
+- "apple" %in% fruit
+
+- "app" %in% fruit
