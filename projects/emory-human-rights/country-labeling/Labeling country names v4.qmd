@@ -1,0 +1,226 @@
+---
+title: "Labeling Country Names for Messages"
+output: html_document
+date: "2025-01-21"
+---
+
+# Introduction
+
+This project was initially assigned as a part towards the ISEI project.
+In this project, we aim to develop an algorithm to determine the country that the US Department of State is mentioning. However, the algorithm we develop may also apply to other large entries of texts. 
+
+Previously, we have built two different methods of algorithm, and each have its flaws and issues. In this project, we build a third model by first examining what worked and didn't work in the previous projects.
+
+The resulting algorithm has a ?% accuracy rate by random sampling / human inspection, which is ?% higher than the previous version of ? %. 
+
+### Datasets Used
+
+The packages we are using is `tidyverse` and `knitr`. 
+
+```{r}
+# Load packages
+pacman::p_load(tidyverse, knitr)
+```
+
+There are four data sets that we are importing for this project. Both of states2016.csv and before2017_fixed_wo_traintest.csv are provided by my research adviser for the purpose of this project. Each row of `states2016.csv` contains the Correlates of War (COW) code of a country among the 194 recognized by United Nations? (which could be found here https://correlatesofwar.org/data-sets/state-system-membership/) 好不通顺的句子, as well as the alternative names and name of the capital(s) of countries.
+
+The before 2017 data set is all the messages scraped from the official website of U.S. Department of State, before 2017. The data set contains ? rows of messages, each with a ?, time?, and text. This will be the data set that we aim to label after creating the algorithm. 
+
+Lastly, we have the previous results of labeling using two different methods. The first version creates a dictionary using the alternative names from `states2016` and finds the most mentioned country in the message, whereas the second version imports a list of regex data on country names to count and find maximum. 
+
+```{r}
+# Import `states2016.csv`
+states2016 <- read_csv("original files/states2016.csv", show_col_types = FALSE)
+
+# Import `before2017_fixed_wo_traintest.csv`
+before2017 <- read_csv("original files/before2017_fixed_wo_traintest.csv", show_col_types = FALSE)
+
+# Import the previous two versions of labeling
+before2017_v1 <- read_csv("labeled_before2017 v1.csv", show_col_types = FALSE)
+before2017_v3 <- read_csv("labeled_before2017_v3.csv", show_col_types = FALSE)
+```
+
+# Initial EDA
+
+To begin with, we check the accuracy of the first two algorithm's results by comparing them with each other. We filter the messages where the two versions of labeling disagrees with one another. 
+
+```{r}
+# Checking data
+before2017_check <- before2017_v1 |>
+  mutate(COW_v3 = before2017_v3[["COW"]]) %>%
+  filter(.data[["most_mentioned"]] != .data[["COW_v3"]]) |>
+  filter(most_mentioned != "TAW")
+
+before2017_check |>
+  write.csv("check for v1.csv")
+```
+
+By examining the data set, we see several trends:
+
+
+# Data Preparation
+
+
+### `states2016` Cleaning and Manipulation
+
+
+```{r}
+# Trimming data frames for use
+states2016 <- states2016[-1,] |>
+  select(-c(ccode, notes))
+```
+
+It seems like `ctrname1` is shorter names and `ctrname2` is the full names of countries. However, if we count for both the names, e.g., "Swaziland" and "Kingdom of Swaziland", then if the phrase "Kingdom of Swaziland" appears in `before2017` it would be counted twice. Therefore, we only need to consider the count for "Swaziland", and other *unique* alternative names such as "Eswatini".
+
+```{r}
+# Deleting longer versions of names
+delete_repetition <- function(row) {
+  for (col in 3:6) {
+    names <- as.character(row[2:(col-1)])
+    names <- names[!is.na(names)]
+    
+    if (!is.na(row[col])) {
+      if (any(str_detect(row[col], names))) {
+        row[col] <- NA
+      }
+    }
+  }
+  return(row)
+}
+
+states2016 <- as.data.frame(t(apply(states2016, 1, delete_repetition)))
+```
+
+```{r}
+# “Antigua & Barbuda” to "Antigua and Barbuda"
+states2016[13, "ctrname1"] <- "Antigua and Barbuda"
+
+# "Republic of Cabo Verde" to "Cabo Verde"
+states2016[83, "ctrname2"] <- "Cabo Verde"
+
+# "Republic of Cote d'Ivoire" contains "Cote d'Ivoire"
+states2016[93, "ctrname2"] <- "Cote d'Ivoire"
+states2016[93, "ctrname3"] <- NA
+
+# "Federated States of Micronesia" contains "Micronesia"
+states2016[193, "ctrname1"] <- "Micronesia"
+states2016[193, "ctrname2"] <- NA
+
+# Delete improper spelling
+states2016[28, "ctrname2"] <- NA # "Republic of Pero"
+states2016[30, "ctrname2"] <- NA # "Plurinational State of Blovia"
+states2016[174, "ctrname2"] <- NA # "Socialist Republic of Viet Nam"
+
+# Delete demonyms
+states2016[43, "ctrname3"] <- NA # "Swiss"
+states2016[51, "ctrname3"] <- NA # "Czech"
+states2016[52, "ctrname3"] <- NA # "Serbia"
+states2016[167, "ctrname4"] <- NA # "Slovak"
+states2016[171, "ctrname3"] <- NA # "Thai"
+
+# Delete names in native language 
+states2016[44, "ctrname3"] <- NA # Espana"
+states2016[137, "ctrname3"] <- NA # Turkiye"
+```
+
+Issues with v1
+- e.g. "Democratic Republic of the Congo" will also be counted into "Republic of the Congo"
+- "UK"
+- Guyana - Georgetown
+
+```{r}
+# New edits
+states2016[35, "ctrname4"] <- NA
+states2016[35, "ctrname5"] <- NA
+
+states2016[157, "ctrname3"] <- NA
+states2016[159, "ctrname3"] <- NA
+states2016[160, "ctrname3"] <- "D. P. R. K."
+states2016[161, "ctrname3"] <- NA
+
+states2016[159, "ctrname2"] <- "(?<!People's\\s)Republic of China"
+states2016[161, "ctrname2"] <- "(?<!Democratic People's\\s)Republic of Korea"
+states2016[105, "ctrname1"] <- "(?<!Democratic Republic of the\\s)Congo(?!lese)"
+states2016[134, "ctrname1"] <- "(?<!South\\s)Sudan"
+states2016[92, "ctrname1"] <- "Niger(?!ia)"
+
+states2016[61, "ctrname1"] <- "Bosnia"
+states2016[25, "capital"] <- NA #Georgetown
+```
+
+```{r}
+  dictionary <- list()
+  for(i in 1:nrow(states2016)) {
+    calph <- states2016[i, 1]
+    names <- unlist(states2016[i, -1])
+    names <- names[!is.na(names)]
+    dictionary[[calph]] <- names
+  }
+```
+
+# Labeling Algorithm Development
+
+The function created for counting country mentions
+
+```{r}
+text_to_country <- function(before2017) {
+  # Function to count country mentions in text
+  frequency <- function(text) {
+    if (is.na(text)) return(NA_character_)
+    counts <- list()
+    for(calph in names(dictionary)) {
+      count <- sum(
+        sapply(dictionary[[calph]], function(name) {str_count(text, name)}))
+      if(count > 0) counts[[calph]] <- count
+    }
+    
+    # Handle cases based on counts
+    if(length(counts) == 0) return("0")
+    max_count <- max(unlist(counts))
+    max_countries <- names(counts)[unlist(counts) == max_count]
+    if(length(max_countries) > 1) return("0")
+    return(max_countries)
+  }
+  
+  # Apply to each row of before2017
+  before2017$calph <- sapply(before2017$texts, frequency)
+  return(before2017)
+}
+```
+
+```{r}
+# Apply counting function
+labeled_before2017 <- text_to_country(before2017)
+```
+
+```{r}
+# Apply counting function
+labeled_master_US <- text_to_country(master_US)
+```
+
+```{r}
+# Exporting the file
+write.csv(labeled_before2017, file = "labeled_before2017_v4.csv", row.names = FALSE)
+```
+
+```{r}
+write.csv(labeled_master_US, file = "labeled_master_US.csv", row.names = FALSE)
+```
+
+# Results
+
+```{r}
+# Check v4 against v3
+before2017_check_2 <- labeled_before2017 |>
+  mutate(COW_v3 = before2017_v3[["COW"]]) %>%
+  filter(.data[["calph"]] != .data[["COW_v3"]])
+write.csv(before2017_check_2, "check for v4 against v3.csv")
+```
+
+```{r}
+# Check v4 against v1
+before2017_check_3 <- labeled_before2017 |>
+  mutate(COW_v1 = before2017_v1[["most_mentioned"]]) |>
+  filter(.data[["calph"]] != .data[["COW_v1"]])
+write.csv(before2017_check_3, "check for v4 against v1.csv")
+```
