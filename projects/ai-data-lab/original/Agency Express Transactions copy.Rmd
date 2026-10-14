@@ -1,0 +1,422 @@
+---
+title: "Natural Disaster's Effect on Food Transactions by Feeding America"
+output: html_document
+date: "2024-10-22"
+---
+
+### Introduction
+
+Feeding America is the largest nonprofit food relief network in the United States, and TechBridge provides the technical backbone by building and maintaining systems such as Agency Express, Donor Express, and the Choice system. One of their key tools, Agency Express, is a web-based platform that enables food banks and partner charities to manage inventory and place orders online.
+
+For this project, I worked at Emory’s AI.Data Lab, which partnered with TechBridge to evaluate the performance of its food distribution platforms through data analysis. My project focused specifically on Agency Express and the impact of natural disasters on food distribution. Using Agency Express' transaction data and NOAA's records on natural disaster events in Georgia (2014–2024), I applied data preparation, visualization, and regression analysis to deliver results that supported TechBridge in assessing how effectively the system responds to community needs in the event of disasters.
+
+Our analysis revealed a statistically significant positive correlation between disaster severity and food distribution: both the number and dollar value of transactions, weekly and monthly, increased significantly during and after natural disasters. This indicates that Agency Express is effectively supporting food supply when communities need it most. In the sections that follow, I describe my approach to data acquisition and preparation, exploratory visualizations, and regression analysis, and conclude with a discussion of insights that can inform TechBridge’s ongoing efforts to optimize Agency Express.
+
+### Data Preparation
+
+# Dataset Overview
+
+The analysis uses two data sets. The first table, provided by TechBridge, is on all the Agency Express's food orders within Georgia (`ae_documentline`), where each row represents an item in a food order delivered from a food bank to a local food pantry (604,017 items in total). The data spans from Aug. 30, 2004 to Oct. 8th, 2024 and includes variables such as the ID of the order (`HEADERID`), the name of the item (`ITEMNAME`), the acceptance date (`ACCEPTEDDATE`), and the price of the item in USD (`RPROP1`). 
+
+The second table, downloaded from the NOAA National Centers for Environmental Information (NCEI) U.S. Billion-Dollar Weather and Climate Disasters database (NOAA NCEI, 2024), contains records of major natural disaster events in Georgia from the start of 2014 to October 10th, 2024. Each row represents a disaster event, and columns includes disaster type (`Disaster`), start and end dates of the event (`Begin Date` and `End Date`), and estimated economic cost (`Unadjusted Cost`).
+
+Source: NOAA National Centers for Environmental Information (NCEI). U.S. Billion-Dollar Weather and Climate Disasters (2024). https://www.ncei.noaa.gov/access/billions/events/GA/2014-2024, DOI: 10.25921/stkw-7w73.
+
+```{r}
+#Loading packages needed
+pacman::p_load(readxl,tidyverse,lubridate,janitor)
+
+#Import Agency Express Data
+ae_documentline_raw <- read_excel("AE Data.xlsx", sheet = "AE - DocumentLine", col_types = "text")
+tail(ae_documentline)
+```
+
+```{r}
+#Import Data on Georgia Natural Disasters
+events_GA_raw <- read_csv("events-GA-2014-2024.csv", skip = 2, show_col_types = FALSE)
+tail(events_GA_raw)
+```
+
+# Data Preparation
+
+Both datasets required cleaning before merging. For the Agency Express dataset, variable names were standardized to a consistent format, dates were converted to YYYY-MM-DD format, and entries with missing acceptance dates were removed. For the disaster dataset, the last two records (the most recent event beginning on September 24, 2024) had estimated costs marked as “TBD” and were therefore excluded. Since this left us with disaster data covering the period from January 1, 2014, to September 23, 2024, we trimmed the Agency Express dataset to the same time range for alignment.
+
+```{r}
+# Clean Agency Express data
+ae_documentline <- ae_documentline_raw|>
+  clean_names()|>
+  mutate(order_id = headerid,
+         accepted_date = ymd(accepteddate),
+         item_price_usd = str_replace_all(rprop1, "[$,]", "")|>
+           as.numeric())|>
+  filter(!is.na(accepted_date))|>
+  select(order_id, itemname, accepted_date, item_price_usd)
+
+# Clean disaster data
+events_GA <- events_GA_raw |>
+  clean_names() |>
+  slice(1:(n() - 2))
+
+head(events_GA)
+```
+```{r}
+# Trim Agency Express data to disaster date range
+ae_documentline <- ae_documentline |>
+  filter(accepted_date >= ymd("2014-01-01") & accepted_date <= ymd("2024-09-23"))
+
+head(ae_documentline)
+```
+
+# Merging Datasets
+
+To quantify disaster severity on a comparable daily basis, we first expanded each disaster event into a sequence of daily records spanning from its begin_date to its end_date (one row per day), thereby creating a calendar date variable for alignment. We then calculated each event’s average daily cost by dividing its total unadjusted cost by the number of days it spanned. This produced an the variable `average_daily_cost`, which allowed us to align disaster intensity directly with daily transaction data.
+
+To study the relationship between natural disasters and food distribution, we aggregated the Agency Express data by date, computing the total daily transaction value and the daily number of orders (distinct order IDs). Finally, we merged the daily AE summary with the daily disaster severity by matching on date, enabling each day’s transactions to be analyzed alongside the severity of any disaster event on that date.
+
+```{r}
+#Transforming the disaster data
+disaster <- events_GA |>
+  rowwise() |>
+  mutate(
+    date_seq = list(seq(ymd(begin_date), ymd(end_date), by = "day")),
+    num_days = length(date_seq),
+    unadjusted_cost = as.numeric(unadjusted_cost),
+    average_daily_cost = `unadjusted_cost` / num_days) |>
+  unnest_longer(date_seq, values_to = "date")|>
+  select(date, name, disaster, begin_date, end_date, unadjusted_cost, num_days, average_daily_cost)
+
+head(disaster)
+```
+```{r}
+# Collapse multiple disasters on the same calendar date to a single row
+disaster_daily <- disaster |>
+  group_by(date) |>
+  summarise(
+    daily_disaster_cost = sum(average_daily_cost, na.rm = TRUE),
+    n_disaster_events   = dplyr::n(),
+    disaster_types      = paste(sort(unique(na.omit(disaster))), collapse = "; "),
+    .groups = "drop"
+)
+
+head(disaster_daily)
+```
+```{r}
+#Computing daily transactions
+ae_full_dates <- tibble(accepted_date = seq(min(ae_documentline$accepted_date), 
+                                      max(ae_documentline$accepted_date), by = "day"))
+                                      
+daily_transaction <- ae_documentline |>
+  group_by(accepted_date) |>
+  summarise(
+    daily_transaction_count = n_distinct(order_id), 
+    daily_transaction = sum(item_price_usd, na.rm = TRUE)) |>
+  right_join(ae_full_dates, by = "accepted_date")|>
+  arrange(accepted_date)
+
+head(daily_transaction)
+```
+To check we have successfully created the table for daily_transactions, we will plot it ... 
+
+```{r}
+#Daily transactions over all time
+daily_transaction |>
+  ggplot(aes(x = accepted_date, y = daily_transaction)) +
+  geom_line() +
+  labs(title = "All Time Daily Transactions",
+       x = "Date",
+       y = "Total Daily Transaction (USD)")
+
+#Number of daily transaction over all time
+daily_transaction |>
+  ggplot(aes(x = accepted_date, y = daily_transaction_count)) +
+  geom_line() +
+  labs(title = "All Time Daily Transaction Count",
+       x = "Date",
+       y = "Number of Daily Transactions")
+```
+
+```{r}
+#Daily transactions over specific range of time
+start_date <- 20180101
+end_date <- 20181231
+
+daily_transaction |>
+  filter(accepted_date >= ymd(start_date) & accepted_date <= ymd(end_date))|>
+  ggplot(aes(x = accepted_date, y = daily_transaction)) +
+  geom_line() +
+  labs(title = paste0("Daily Transaction from ", ymd(start_date), " to ", ymd(end_date)),
+       x = "Date",
+       y = "Total Daily Transaction (USD)")
+
+daily_transaction |>
+  filter(accepted_date >= ymd(start_date) & accepted_date <= ymd(end_date))|>
+  ggplot(aes(x = accepted_date, y = daily_transaction_count)) +
+  geom_line() +
+  labs(title = paste0("Daily Transaction Count from ", ymd(start_date), " to ", ymd(end_date)),
+       x = "Date",
+       y = "Daily Transaction count")
+```
+
+```{r}
+#Joining natural disaster and daily transaction data
+disaster_on_transaction <- daily_transaction |>
+  rename(date = accepted_date) |>
+  left_join(disaster_daily, by = "date")
+
+head(disaster_on_transaction)
+```
+
+# Main Columns & Descriptive Statistics
+
+The merged dataset focuses on several key variables:
+
+daily_transaction: the total USD value of Agency Express orders on a given day.
+
+daily_transaction_count: the number of unique orders placed on that day.
+
+disaster: the type of disaster, if one was occurring.
+
+average_daily_cost: daily monetary estimate of disaster severity.
+
+To summarize these, we computed descriptive statistics on the merged dataset.
+
+```{r}
+# Descriptive statistics for main columns
+disaster_on_transaction |>
+  select(daily_transaction, daily_transaction_count, daily_disaster_cost) |>
+  summary()
+```
+
+### Data Transformation
+
+To investigate the relationship between natural disasters and food distribution at different time scales, we aggregated the merged dataset (disaster_on_transaction) into weekly and monthly summaries. These summaries allow us to examine both long-term patterns and short-term fluctuations in Agency Express transactions relative to disaster severity.
+
+We computed total weekly transaction count, monthly transaction value (USD), and monthly disaster costs. Missing values were handled by replacing them with zeros when no disasters were reported.
+
+```{r}
+#Creating weekly data
+weekly_disaster_on_transaction <- disaster_on_transaction |>
+  group_by(date = floor_date(date, "week")) |>
+  summarise(
+    weekly_transaction_count = ifelse(all(is.na(daily_transaction_count)), NA,
+                                      sum(daily_transaction_count, na.rm = TRUE)),
+    weekly_transaction       = ifelse(all(is.na(daily_transaction)), NA,
+                                      sum(daily_transaction, na.rm = TRUE)),
+    weekly_cost              = ifelse(all(is.na(daily_disaster_cost)), 0,
+                                      sum(daily_disaster_cost, na.rm = TRUE)),
+    weekly_disaster_types    = {
+      types <- stringr::str_split(na.omit(disaster_types), ";\\s*") |> unlist() |> unique()
+      if (length(types) == 0) NA_character_ else paste(sort(types), collapse = "; ")
+    },
+    .groups = "drop"
+  )
+
+#Creating monthly data
+monthly_disaster_on_transaction <- disaster_on_transaction |>
+  group_by(date = floor_date(date, "month")) |>
+  summarise(
+    monthly_transaction_count = ifelse(all(is.na(daily_transaction_count)), NA,
+                                      sum(daily_transaction_count, na.rm = TRUE)),
+    monthly_transaction       = ifelse(all(is.na(daily_transaction)), NA,
+                                      sum(daily_transaction, na.rm = TRUE)),
+    monthly_cost              = ifelse(all(is.na(daily_disaster_cost)), 0,
+                                      sum(daily_disaster_cost, na.rm = TRUE)),
+    monthly_disaster_types    = {
+      types <- stringr::str_split(na.omit(disaster_types), ";\\s*") |> unlist() |> unique()
+      if (length(types) == 0) NA_character_ else paste(sort(types), collapse = "; ")
+    },
+    .groups = "drop"
+  )
+```
+
+We also created derived variables to make the data more suitable for regression modeling and visualization. Specifically, we adjusted disaster costs by adding 1 to avoid zeros, and then applied a log10 transformation to reduce skewness. These transformations match the scale used in regression plots and allow for more interpretable linear models.
+
+```{r}
+# Weekly: add cost+1 and log10(cost+1)
+weekly_disaster_on_transaction <- weekly_disaster_on_transaction |>
+  mutate(
+    weekly_cost_adj = weekly_cost + 1,
+    log_weekly_cost = log10(weekly_cost_adj)
+  )
+# Monthly: add cost+1 and log10(cost+1)
+monthly_disaster_on_transaction <- monthly_disaster_on_transaction |>
+  mutate(
+    monthly_cost_adj = monthly_cost + 1,
+    log_monthly_cost = log10(monthly_cost_adj)
+  )
+```
+
+### Results & Analysis
+
+```{r}
+#Plotting Natural Disaster and Weekly Transactions
+start_date <- ymd("20150101")
+end_date   <- ymd("20171231")
+
+weekly_disaster_on_transaction |>
+  filter(date >= start_date & date <= end_date) |>
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = weekly_transaction, color = "Weekly Transaction ($)")) +
+  geom_line(aes(y = weekly_cost,      color = "Weekly Natural Disaster Cost (million $)")) +
+  labs(
+    title = paste0("Natural Disaster Cost and AE Transactions from ", start_date, " to ", end_date),
+    x = "Date", y = "Value", color = "Legend"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+#Plotting Natural Disaster and Monthly Transactions
+start_date <- ymd("20150101")
+end_date   <- ymd("20251231")
+
+monthly_disaster_on_transaction |>
+  filter(date >= start_date & date <= end_date) |>
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = monthly_transaction, color = "Monthly Transaction ($)")) +
+  geom_line(aes(y = monthly_cost,      color = "Monthly Natural Disaster Cost (million $)")) +
+  labs(
+    title = paste0("Natural Disaster Cost and AE Transactions from ", start_date, " to ", end_date),
+    x = "Date", y = "Value", color = "Legend"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+#Plotting Natural Disaster's effect on Weekly Transactions
+weekly_disaster_on_transaction |>
+  mutate(weekly_cost_adj = weekly_cost + 1) |>  # Small adjustment to handle zeros
+  ggplot(aes(x = weekly_cost_adj, y = weekly_transaction, color = weekly_disaster_types)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "blue") +
+  scale_x_log10() +
+  labs(
+    title = "Natural Disaster's Effect on AE Transactions",
+    y = "Weekly Transactions ($)",
+    x = "Weekly Natural Disaster Cost (million $)",
+    color = "Disaster Type"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#Plotting Natural Disaster's effect on Monthly Transactions
+monthly_disaster_on_transaction |>
+  mutate(monthly_cost_adj = monthly_cost + 1) |>  # Small adjustment to handle zeros
+  ggplot(aes(x = monthly_cost_adj, y = monthly_transaction, color = monthly_disaster_types)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "blue") +
+  scale_x_log10() +
+  labs(
+    title = "Natural Disaster's Effect on AE Transactions",
+    y = "Monthly Transactions ($)",
+    x = "Monthly Natural Disaster Cost (million $)",
+    color = "Disaster Type"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+#Plotting Natural Disaster's effect on Weekly Transaction Count
+weekly_disaster_on_transaction |>
+  mutate(weekly_cost_adj = weekly_cost + 1) |>
+  ggplot(aes(x = weekly_cost_adj,
+             y = weekly_transaction_count,
+             color = weekly_disaster_types)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "blue") +
+  scale_x_log10() +
+  labs(
+    title = "Natural Disaster's Effect on AE Transactions",
+    y = "Weekly Transaction Count",
+    x = "Weekly Natural Disaster Cost (log10 of $ + 1)",
+    color = "Disaster Type"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+#Plotting Natural Disaster's effect on Monthly Transaction Count
+monthly_disaster_on_transaction |>
+  mutate(monthly_cost_adj = monthly_cost + 1) |>
+  ggplot(aes(x = monthly_cost_adj,
+             y = monthly_transaction_count,
+             color = monthly_disaster_types)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "blue") +
+  scale_x_log10() +
+  labs(
+    title = "Natural Disaster's Effect on AE Transactions",
+    y = "Weekly Transaction Count",
+    x = "Weekly Natural Disaster Cost (log10 of $ + 1)",
+    color = "Disaster Type"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+# Weekly models
+model_weekly_value <- lm(
+  weekly_transaction ~ log_weekly_cost,
+  data = weekly_disaster_on_transaction,
+  na.action = na.omit
+)
+
+model_weekly_count <- lm(
+  weekly_transaction_count ~ log_weekly_cost,
+  data = weekly_disaster_on_transaction,
+  na.action = na.omit
+)
+
+model_monthly_value <- lm(
+  monthly_transaction ~ log_monthly_cost,
+  data = monthly_disaster_on_transaction,
+  na.action = na.omit
+)
+
+model_monthly_count <- lm(
+  monthly_transaction_count ~ log_monthly_cost,
+  data = monthly_disaster_on_transaction,
+  na.action = na.omit
+)
+
+
+# Model summaries
+summary(model_weekly_value)
+summary(model_weekly_count)
+summary(model_monthly_value)
+summary(model_monthly_count)
+```
+
+```{r}
+pacman::p_load(broom, dplyr, tibble, purrr, stringr)
+
+models <- list(
+  "Weekly: Transaction $"   = model_weekly_value,
+  "Weekly: Transaction #"   = model_weekly_count
+)
+
+# Glance stats (R², adj R², N)
+glances <- map_df(models, glance, .id = "Model") |>
+  select(Model, r.squared, adj.r.squared, nobs)
+
+# Tidy coefficients (grab the slope on log(cost+1))
+coefs <- map_df(models, tidy, .id = "Model") |>
+  filter(str_detect(term, "log_(monthly|weekly)_cost")) |>
+  transmute(Model,
+            Slope = estimate,
+            StdErr = std.error,
+            `t value` = statistic,
+            `p value` = p.value)
+
+# Combine
+reg_table <- coefs |>
+  left_join(glances, by = "Model") |>
+  arrange(Model)
+
+reg_table
+
+```
