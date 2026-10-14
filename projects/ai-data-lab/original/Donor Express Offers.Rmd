@@ -1,0 +1,192 @@
+---
+title: "Donor Express Offers"
+output: html_document
+date: "2024-11-16"
+---
+
+```{r}
+#Loading packages
+pacman::p_load(readxl, tidyverse, janitor)
+```
+
+```{r}
+#Import Agency Express Data
+amx_offer_header <- read_excel("Choice Data.xlsx", sheet = "AMX_OFFER_HEADER", col_types = "text")
+```
+
+```{r}
+# Data cleaning
+amx_offer_header <- amx_offer_header|>
+  clean_names()|>
+  mutate(offerdate = mdy(offerdate)) |>
+  rename(offer_date = offerdate)|>
+  filter(status %in% c("CANCELLED", "RECEIPTED", "TURNEDDOWN"))
+```
+
+```{r}
+# Cities in Georgia with the most Donor Express offers
+amx_offer_header |>
+  group_by(wcontactcity)|>
+  summarise(count = n(), .groups = "drop")|>
+  arrange(desc(count))
+```
+
+```{r}
+# Daily offer
+daily_offer <- amx_offer_header |>
+  select(offer_date, status)
+```
+
+```{r}
+# Daily offer visualization
+daily_offer|>
+  filter(year(offer_date) == 2024,
+         month(offer_date) == 5)|>
+  ggplot() +
+  geom_bar(
+    aes(x = offer_date, fill = status)) +
+  labs(title = "Daily Count of Doner Express Offers",
+       x = "Date",
+       y = "Count",
+       fill = "Status")
+```
+
+```{r}
+#What happened that day???
+amx_offer_header|>
+  filter(offer_date == mdy("05022024"))
+```
+
+```{r}
+# Daily offer count by status
+full_dates <- tibble(offer_date = seq(min(daily_offer$offer_date), 
+                                      max(daily_offer$offer_date), by = "day"))
+daily_offer_count <- daily_offer |>
+  group_by(offer_date, status) |>
+  summarise(count = n(),.groups = "drop")|>
+  pivot_wider(names_from = status, values_from = count)|>
+  right_join(full_dates, by = "offer_date")|>
+  arrange(offer_date)|>
+  clean_names()|>
+  rename(turned_down = turneddown)
+
+daily_offer_count
+```
+
+```{r}
+# Weekly offer
+weekly_offer <- daily_offer |>
+  mutate(offer_week = floor_date(offer_date, "week")) |>
+  select(offer_week, status)
+```
+
+```{r}
+#Weekly offer visualization
+weekly_offer|>
+  ggplot() +
+  geom_bar(aes(x = offer_week, fill = status)) +
+  labs(title = "Weekly Count of Doner Express Offers",
+       x = "Week (Start Date)",
+       y = "Count",
+       fill = "Status")
+```
+
+```{r}
+# Weekly offer count by status
+full_weeks <- tibble(offer_week = seq(min(weekly_offer$offer_week), 
+                                      max(weekly_offer$offer_week), by = "week"))
+
+
+weekly_offer_count <- weekly_offer |>
+  group_by(offer_week, status) |>
+  summarise(count = n(), .groups = "drop") |>
+  pivot_wider(names_from = status, values_from = count)|>
+  right_join(full_weeks, by = "offer_week")|>
+  arrange(offer_week)|>
+  clean_names()|>
+  rename(turned_down = turneddown)
+
+weekly_offer_count
+```
+
+```{r}
+#Import Data on Georgia Natural Disasters
+events_GA <- read_csv("events-GA-2014-2024.csv", skip = 2)
+```
+
+```{r}
+# Data cleaning
+disaster <- events_GA |>
+  
+  # Variables
+  clean_names()|>
+  mutate(cost = as.numeric(unadjusted_cost),
+         death = as.numeric(deaths),
+         begin_date = ymd(begin_date),
+         end_date = ymd(end_date))|>
+ 
+   # Structure
+  rowwise() |>
+  mutate(date = list(seq(begin_date, end_date, by = "day"))) |>
+  unnest_longer(date)|>
+  
+  # Filter/select
+  filter(!str_detect(disaster, "Drought|Wildfire"))|>
+  select(date, disaster, cost, death)
+```
+
+```{r}
+# Joining `daily_offer_count` and `disaster`
+disaster_on_offer <- left_join(
+  daily_offer_count|>
+    rename(date = offer_date),
+  disaster,
+  by = "date")
+```
+
+```{r}
+# Creating weekly disaster
+weekly_disaster <- disaster|>
+  mutate(week = floor_date(date, "week"))|>
+  group_by(week, disaster)|>
+  summarise(cost = first(na.omit(cost)),
+            death = first(na.omit(death)),
+            .groups = "drop")
+```
+
+```{r}
+# Joining `weekly_offer_count` and `weekly_disaster`
+weekly_disaster_on_offer <- left_join(
+  weekly_offer_count|>
+    rename(week = offer_week),
+  weekly_disaster,
+  by = "week")
+```
+
+```{r}
+weekly_disaster_on_offer|>
+  mutate(cost = if_else(is.na(disaster) & is.na(cost), 0, cost))|>
+  filter(week >= mdy("01012018") & week <= mdy("12312018")) |>
+  ggplot(aes(x = week)) +
+  geom_line(aes(y = receipted, color = "Weekly Receipted Offer Count")) +
+  geom_line(aes(y = log(cost), color = "Estimated Cost of Natural Disaster ($, log)")) +
+  
+  labs(title = "Natural Disaster and Doner Express Weekly Receipted Offers",
+       x = "Week",
+       y = "Value",
+       color = NULL ) +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+weekly_disaster_on_offer|>
+  mutate(cost = if_else(is.na(disaster) & is.na(cost), 0, 1))|>
+  ggplot(aes(x = cost, y = receipted, color = disaster))+
+  geom_point()+
+  geom_smooth(aes(color = NULL), method = "lm")+
+  ylim(0,150)+
+  labs(title = "Natural Disaster's Effect on Doner Express Weekly Receipted Offers",
+       x = "Natural Disaster Occurrence (0 = None, 1 = Yes)",
+       y = "Weekly Receipted Offers Count",
+       color = NULL )
+```
